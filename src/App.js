@@ -1,7 +1,34 @@
 import './App.css';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
+
+// FIREBASE START
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+import { getFirestore, collection, addDoc, setDoc, doc, deleteDoc, getDocs } from "firebase/firestore";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDc22ioyaNRosErtkzUXtKJ2rUKG8yDHkw",
+  authDomain: "todo-list-web-1.firebaseapp.com",
+  projectId: "todo-list-web-1",
+  storageBucket: "todo-list-web-1.appspot.com",
+  messagingSenderId: "624557223587",
+  appId: "1:624557223587:web:6713cb745803f2e832d916",
+  measurementId: "G-KD40B1J66S"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
+const db = getFirestore(app);
+// FIREBASE END
 
 const TodoItemInputField = (props) => {
   const [input, setInput] = useState("");
@@ -11,23 +38,105 @@ const TodoItemInputField = (props) => {
     setInput("");
   }
 
-  return (<div>
-    <TextField
-      id="todo-item-input"
-      label="Todo item"
-      variant="outlined" 
-      value={input} 
-      onChange = {(e) => setInput(e.target.value)}
-    />
-    <Button variant="outlined" onClick={onSubmit}>Submit</Button>
-  </div>);
+  return (
+    <div>
+      <TextField
+        id="todo-item-input"
+        label="Todo item"
+        variant="outlined" 
+        value={input} 
+        onChange = {(e) => setInput(e.target.value)}
+      />
+      <Button variant="outlined" onClick={onSubmit}>Submit</Button>
+    </div>
+  );
 };
   
+const TodoItem = (props) => {
+  const style = props.todoItem.isFinished ? { textDecoration: 'line-through' } : [];
+  return (
+    <li>
+      <span
+        style={style} 
+        onClick={() => props.onTodoItemClick(props.todoItem)}
+      >
+        {props.todoItem.todoItemContent}
+      </span>
+      <Button variant="outlined" onClick={() => props.onRemoveClick(props.todoItem)}>Remove</Button>
+    </li>
+  );
+};
+
+const TodoItemList = (props) => {
+  const todoList = props.todoItemList.map((todoItem, index) => {
+    return <TodoItem 
+      key={todoItem.id} 
+      todoItem={todoItem} 
+      onTodoItemClick={props.onTodoItemClick} 
+      onRemoveClick={props.onRemoveClick}
+    />
+  });
+
+  return (
+    <div>
+      <ul>{todoList}</ul>
+    </div>
+  );
+};
 
 function App() {
+  const [todoItemList, setTodoItemList] = useState([]);
+
+  const syncTodoItemListStateWithFirestore = () => {
+    getDocs(collection(db, "todoItem")).then((querySnapshot) => { // 앱이 처음 켜졌을 때 todoItem을 다 읽어와라
+      const firestoreTodoItemList = [];
+      querySnapshot.forEach((doc) => {
+        firestoreTodoItemList.push({ // 가져온 데이터를 firestoreTodoItemList 이 배열에 넣어서 
+          id: doc.id,
+          todoItemContent: doc.data().todoItemContent,
+          isFinished: doc.data().isFinished,
+        });
+      });
+      setTodoItemList(firestoreTodoItemList); // setTodoItemList를 사용해서 todoList를 추가해줘라
+    });
+  };
+    
+  useEffect(() => {
+    syncTodoItemListStateWithFirestore();
+  }, []);
+    
+  // FIREBASE
+  const onSubmit = async (newTodoItem) => {
+    await addDoc(collection(db, "todoItem"), {
+      todoItemContent: newTodoItem,
+      isFinished: false,
+    });
+
+    syncTodoItemListStateWithFirestore();
+  };
+    
+  const onTodoItemClick = async (clickedTodoItem) => {
+    const todoItemRef = doc(db, "todoItem", clickedTodoItem.id);
+    await setDoc(todoItemRef, { isFinished: !clickedTodoItem.isFinished }, { merge: true });
+
+    syncTodoItemListStateWithFirestore();
+  };
+
+  const onRemoveClick = async (removedTodoItem) => {
+    const todoItemRef = doc(db, "todoItem", removedTodoItem.id);
+    await deleteDoc(todoItemRef);
+    
+    syncTodoItemListStateWithFirestore();
+  };
+
   return (
     <div className="App">
-      <TodoItemInputField onSubmit={() => {}} />
+      <TodoItemInputField onSubmit={onSubmit} />
+      <TodoItemList 
+        todoItemList={todoItemList} 
+        onTodoItemClick={onTodoItemClick} 
+        onRemoveClick={onRemoveClick}  
+      />
     </div>
   );
 }
