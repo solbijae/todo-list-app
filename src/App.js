@@ -7,7 +7,7 @@ import Button from '@mui/material/Button';
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getFirestore, collection, addDoc, setDoc, doc, deleteDoc, getDocs } from "firebase/firestore";
+import { getFirestore, collection, addDoc, setDoc, doc, deleteDoc, getDocs, query, orderBy } from "firebase/firestore";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -88,13 +88,15 @@ function App() {
   const [todoItemList, setTodoItemList] = useState([]);
 
   const syncTodoItemListStateWithFirestore = () => {
-    getDocs(collection(db, "todoItem")).then((querySnapshot) => { // 앱이 처음 켜졌을 때 todoItem을 다 읽어와라
+    const q = query(collection(db, "todoItem"), orderBy("createdTime", "desc"));
+    getDocs(q).then((querySnapshot) => { // 앱이 처음 켜졌을 때 todoItem을 다 읽어와라
       const firestoreTodoItemList = [];
       querySnapshot.forEach((doc) => {
         firestoreTodoItemList.push({ // 가져온 데이터를 firestoreTodoItemList 이 배열에 넣어서 
           id: doc.id,
           todoItemContent: doc.data().todoItemContent,
           isFinished: doc.data().isFinished,
+          createdTime: doc.data().createdTime ?? 0,
         });
       });
       setTodoItemList(firestoreTodoItemList); // setTodoItemList를 사용해서 todoList를 추가해줘라
@@ -110,6 +112,7 @@ function App() {
     await addDoc(collection(db, "todoItem"), {
       todoItemContent: newTodoItem,
       isFinished: false,
+      createdTime: Math.floor(Date.now() / 1000),
     });
 
     syncTodoItemListStateWithFirestore();
